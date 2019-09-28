@@ -1,5 +1,9 @@
 # ESP8266-Projects
 collection of some esp8266 projects
 
-## WiFiAccessPoint_Webserver
-ESP8266 Program that introduces a WiFi Access Point and a webserver.
+### WiFiAccessPoint_Webserver
+Example that introduces a WiFi access point and webserver.
+
+### Wifi_MQTT-Client_dualLED-control
+Wifi- and MQTT client to control brightness of two LEDs (warm and cold white)
+
