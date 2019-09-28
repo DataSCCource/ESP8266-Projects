@@ -1,7 +1,8 @@
 # WiFiAccessPoint_Webserver
 ESP8266 Program that introduces a WiFi Access Point and a webserver.
 
-Connected to the AP ("ESP8266-ap") you need to open http://192.168.4.1/ in a browser.
+Connected to the AP ("ESP8266-ap") you need to open http://192.168.4.1/ in a browser.  
+__Requires board library :__ https://github.com/esp8266/Arduino
 
 ### Webserver endpoints:
 * __/__  
