@@ -1,5 +1,5 @@
 # ESP8266-Projects
-collection of some esp8266 projects
+collection of some esp8266 example projects
 
 ### WiFiAccessPoint_Webserver
 Example that introduces a WiFi access point and webserver.
