@@ -1,0 +1,27 @@
+
+sensor/motion/1	[0|1]
+
+sensor/distance/1
+
+actor/led/enable [0|1]
+actor/led/color [#123456]
+actor/led/mode [motion|blink|fade|fire]
+actor/led/timeout [5-240]
+actor/led/brightness [0-100]
+
+control/led/mode  [motion|blink|fade|fire|off]
+control/led/color [#123456]
+control/led/brightness [0-100]
+
+
+
+
+String currentMode = "motion";
+String currentColor = "#FF0000";
+String currentBrightness = "100";
+bool motionDetected = false;
+int ledOntimeDuration = 15; // seconds
+int ledOntimeSince = 0;
+
+
+
