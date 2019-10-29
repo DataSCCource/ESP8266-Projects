@@ -89,7 +89,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
 
-  if(strcmp(topic, "sensor/motion/1") == 0) {
+  if(strcmp(topic, "sensor/motion") == 0) {
     // 1 -> true; 0 -> false
     setMotionDetected(strcmp(value, "1") == 0);
   } else if(strcmp(topic, "sensor/distance/1") == 0) {

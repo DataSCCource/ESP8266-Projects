@@ -5,7 +5,10 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-
+#include <FastLED.h>
+#define LED_PIN     14
+#define NUM_LEDS    60
+CRGB leds[NUM_LEDS];
 
 const char* ssid = "SmartHub";
 const char* password = "Lismaholed";
@@ -14,10 +17,9 @@ const char* mqtt_server = "192.168.0.10";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-String currentMode = "motion";
-String currentColor = "#FF0000";
+String currentMode = "color";
+String currentColor = "#2836F4";
 String currentBrightness = "100";
-bool motionDetected = false;
 int ledOntimeDuration = 15; // seconds
 int ledOntimeSince = 0;
 
@@ -26,6 +28,9 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+
+  FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
+  
   handleLight();
 }
 
@@ -62,9 +67,7 @@ void reconnect() {
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
 
-      client.subscribe("sensor/#");
       client.subscribe("actor/#");
-      client.subscribe("control/#");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -79,7 +82,7 @@ void reconnect() {
 void callback(char* topic, byte* payload, unsigned int length) {
   //get rid of leftovers in the payload-buffer
   payload[length] = '\0';
-  String value = (char*)payload;
+  const char* value = (char*)payload;
   
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -89,33 +92,31 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
 
-  if(strcmp(topic, "sensor/motion/1") == 0) {
+  if(strcmp(topic, "actor/led/enable") == 0) {
     // 1 -> true; 0 -> false
-    setMotionDetected(strcmp(value, "1") == 0);
-  } else if(strcmp(topic, "sensor/distance/1") == 0) {
-    setDistance(value);
-
-  } else if(strcmp(topic, "control/led/mode") == 0) {
-    setWorkingMode(value);
-  } else if(strcmp(topic, "control/led/color") == 0) {
+    if(strcmp(value, "1") == 0) {
+      setWorkingMode("color");
+    } else {
+      setWorkingMode("off");
+    }
+  } else if(strcmp(topic, "actor/led/color") == 0) {
     setWorkingMode("color");
-    setLedColor(value);   
-  } else if(strcmp(topic, "control/led/brightness") == 0) {
-    setLedBrightness(value);
+    setColor(value);
+
   } else {
-    Serial.println("## Unbehandeltes Topic: " + value);
+    Serial.println("## Unbehandeltes Topic: " + (String)value);
   }
 }
 
-void setWorkingMode(String newMode) {
-  Serial.println("Setting mode to " + newMode);
+void setWorkingMode(const char* newMode) {
+  Serial.println("Setting mode to " + (String) newMode);
   currentMode = newMode;
 
   handleLight();
 }
 
-void setLedColor(String newColor) {
-  Serial.println("Setting color to " + newColor);
+void setColor(const char* newColor) {
+  Serial.println("Setting color to " + (String) newColor);
   currentColor = newColor;
 
   handleLight();
@@ -128,46 +129,25 @@ void setLedBrightness(String newBrightness) {
   handleLight();
 }
 
-void setMotionDetected(bool newDetected) {
-  if(newDetected) {
-    // resetTimer
-    ledOntimeSince = millis();  
-  }
-  
-  motionDetected = newDetected
-  handleLight();
-  
-}
-
-void setDistance(String newDistance) {
-  Serial.println("Setting distande to " + newDistance);
-
-  // TODO set distance
-  handleLight();
-}
 
 // Handle LED with current settings
 void handleLight() {
 
-  if (strcmp(currentMode, "color") == 0){
-    client.publish("actor/led/color", currentColor);
-
-  } else if (strcmp(currentMode, "motion") == 0){
-    if(motionDetected) {
-      client.publish("actor/led/enable", "1");
+  if (currentMode.equals("color")){
+    long number = (long) strtol( &currentColor[1], NULL, 16);
+    int red = number >> 16 & 0xFF;
+    int green = number >> 8 & 0xFF;
+    int blue = number & 0xFF;
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB ( red, green, blue);
     }
-
-  } else if (strcmp(currentMode, "blink") == 0){
-    client.publish("actor/led/mode", "blink");
-
-  } else if (strcmp(currentMode, "fade") == 0){
-    client.publish("actor/led/mode", "fade");
-
-  } else if (strcmp(currentMode, "fire") == 0){
-     client.publish("actor/led/mode", "fire");
-
+    FastLED.show();
+  } else if (currentMode.equals("off")){
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB ( 0, 0, 0);
+    }
+    FastLED.show();
   } else {
-    client.publish("actor/led/enable", "0");
   }
 
   
@@ -179,8 +159,4 @@ void loop() {
     reconnect();
   }
   client.loop();
-
-  if((ledOntimeSince + ledOntimeDuration*1000) > millis() && strcmp(currentMode, "motion") == 0) {
-    client.publish("actor/led/enable", "0");
-  }
 }

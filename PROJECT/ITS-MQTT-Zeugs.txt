@@ -5,7 +5,7 @@ sensor/distance/1
 
 actor/led/enable [0|1]
 actor/led/color [#123456]
-actor/led/mode [motion|blink|fade|fire]
+actor/led/mode [color|motion|blink|fade|fire]
 actor/led/timeout [5-240]
 actor/led/brightness [0-100]
 
