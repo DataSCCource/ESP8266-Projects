@@ -5,7 +5,7 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-//#include <FastLED.h>
+#include <FastLED.h>
 #include <WS2812FX.h>
 
 #define LED_PIN     14  // D5
@@ -15,25 +15,24 @@ const char* ssid = "SmartHub";
 const char* password = "Lismaholed";
 const char* mqtt_server = "192.168.0.10";
 
-WiFiClient espClient;
-PubSubClient client(espClient);
 
-int MODE_FIREPLACE =   1;
-int MODE_COLOR =       2;
-int MODE_COLORCHANGE = 3;
-int MODE_RAINBOW =     4;
-int MODE_FADE =        5;
+int MODE_FIREPLACE = -1;
 
 bool fadeUp = false;
 bool fadeDown = false;
 int currentBrightness = 0;
 long nextFade = 0;
 
-int currentMode = MODE_COLOR;
+int currentMode = 0;
 uint32_t currentColor = RED;
 int targetBrightness = 255;
-bool directModeSet = false;
+int currentSpeed = 1000;
 
+String ACTOR_NR = "1";
+String MQTT_TOPIC = "/actor/led/"+ACTOR_NR;
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 WS2812FX ws2812fx = WS2812FX(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 void setup() {
@@ -46,7 +45,7 @@ void setup() {
 
   ws2812fx.init();
   ws2812fx.setBrightness(0);
-  ws2812fx.setSpeed(1000);
+  ws2812fx.setSpeed(currentSpeed);
   ws2812fx.setColor(currentColor);
   ws2812fx.setMode(FX_MODE_STATIC);
   ws2812fx.start();
@@ -83,17 +82,19 @@ void setup_wifi() {
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
-    delay(100);
+    delay(500);
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
-    String clientId = "ESP8266Client-";
+    String clientId = "LEDActor1-";
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
       digitalWrite(LED_BUILTIN, LOW); 
 
-      client.subscribe("actor/#");
+      String subTopic = MQTT_TOPIC+"/#";
+      sendStatus();
+      client.subscribe(subTopic.c_str());
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -104,11 +105,35 @@ void reconnect() {
   }
 }
 
+void sendStatus() {
+  Serial.println("## Sending status");
 
-void callback(char* topic, byte* payload, unsigned int length) {
+  String tmpTopic = MQTT_TOPIC+"/enable";
+  client.publish(tmpTopic.c_str(), currentBrightness>0?"1":"0");
+
+  tmpTopic = MQTT_TOPIC+"/color";
+  String hexColor = "#" + String(currentColor, HEX);
+  client.publish(tmpTopic.c_str(), hexColor.c_str());
+
+  tmpTopic = MQTT_TOPIC+"/mode";
+  String modeString = (String) currentMode;
+  client.publish(tmpTopic.c_str(), modeString.c_str());
+
+  tmpTopic = MQTT_TOPIC+"/brightness";
+  String brightString = (String)targetBrightness;
+  client.publish(tmpTopic.c_str(), brightString.c_str());
+
+  tmpTopic = MQTT_TOPIC+"/speed";
+  String speedString = (String)currentSpeed;
+  client.publish(tmpTopic.c_str(), speedString.c_str());
+
+}
+
+void callback(char* topic_char, byte* payload, unsigned int length) {
   //get rid of leftovers in the payload-buffer
   payload[length] = '\0';
   const char* value = (char*)payload;
+  String topic = (String) topic_char;
   
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -118,46 +143,41 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
 
-  if(strcmp(topic, "actor/led/enable") == 0) {
+  if(topic.equals(MQTT_TOPIC+"/enable")) {
     // 1 -> true; 0 -> false
     if(strcmp(value, "1") == 0) {
       setLedBrightness(255);
     } else {
       setLedBrightness(0);
     }
-  } else if(strcmp(topic, "actor/led/color") == 0) {
+  } else if(topic.equals(MQTT_TOPIC+"/color")) {
     setLedColor(value);
-  } else if(strcmp(topic, "actor/led/mode") == 0) {
-    Serial.println("Mode: " + (String)value);
-    String newMode = (String)value;
-    if(newMode.equals("color")) {
-      setWorkingMode(MODE_COLOR);
-    } else if(newMode.equals("motion")) {
-      setWorkingMode(MODE_COLORCHANGE);
-    } else if(newMode.equals("fade")) {
-      setWorkingMode(MODE_FADE);
-    } else if(newMode.equals("rainbow")) {
-      setWorkingMode(MODE_RAINBOW);
-    } else if(newMode.equals( "fire")) {
-      setWorkingMode(MODE_FIREPLACE);
-    } else {
-      setWorkingMode(MODE_COLOR);
-    }
-    
-    
-  } else if(strcmp(topic, "actor/led/modevalue") == 0) {
-    directModeSet = true;
-    ws2812fx.setMode(atol(value));
-  } else if(strcmp(topic, "actor/led/brightness") == 0) {
+  } else if(topic.equals(MQTT_TOPIC+"/mode")) {
+    int newMode = ((String)value).toInt();
+    String modeName = "Fire";
+    if(newMode >= 0) modeName = _names[newMode];
+    Serial.println("Mode: " + modeName);
+
+    setWorkingMode(newMode);
+  } else if(topic.equals(MQTT_TOPIC+"/brightness")) {
     setLedBrightness(atol(value));
+  } else if(topic.equals(MQTT_TOPIC+"/speed")) {
+    setEffectSpeed(atol(value));
   } else {
     Serial.println("## Unbehandeltes Topic: " + (String)value);
+    sendStatus();
   }
 }
+
+
+void setEffectSpeed(int newSpeed) {
+  currentSpeed = newSpeed;
+  ws2812fx.setSpeed(currentSpeed);
+}
+
 void setWorkingMode(int newMode) {
   Serial.println("Setting mode to " + (String) newMode);
   currentMode = newMode;
-  directModeSet = false;
 
   handleLight();
 }
@@ -165,7 +185,6 @@ void setWorkingMode(int newMode) {
 void setLedColor(const char*  newColor) {
   Serial.println("Setting color to " + (String) newColor);
   currentColor = (uint32_t) strtol( &newColor[1], NULL, 16);
-  Serial.println("Setting color to " + (String) currentColor);
 
   handleLight();
 }
@@ -181,23 +200,18 @@ void setLedBrightness(int newBrightness) {
 // Handle LED with current settings
 void handleLight() {
   ws2812fx.setColor(currentColor);
-  if(!directModeSet) {
-    if (currentMode == MODE_COLOR) {
-      ws2812fx.setMode(FX_MODE_STATIC);
-    } else if (currentMode == MODE_FADE ){
-      ws2812fx.setMode(FX_MODE_FADE);
-    } else if (currentMode == MODE_FIREPLACE ){
-      // TODO
-    } else if (currentMode == MODE_COLORCHANGE ){
-      ws2812fx.setMode(FX_MODE_FIREWORKS);
-    } else if (currentMode == MODE_RAINBOW ){
-      ws2812fx.setMode(FX_MODE_RAINBOW_CYCLE);
-    } else {
-      //TODO
-    }
+  if(currentMode == MODE_FIREPLACE) {
+    // TODO FIRE ;)
+//    ws2812fx.setColor(255, 69,3);
+//    ws2812fx.setSpeed(70);
+//    ws2812fx.setMode(FX_MODE_FIRE_FLICKER_INTENSE);
+      ws2812fx.setMode(FX_MODE_CUSTOM);
+      ws2812fx.setCustomMode(customFireEffect);
+  } else {
+    ws2812fx.setColor(currentColor);
+    ws2812fx.setSpeed(currentSpeed);
+    ws2812fx.setMode(currentMode);
   }
-
- 
 }
 
 
