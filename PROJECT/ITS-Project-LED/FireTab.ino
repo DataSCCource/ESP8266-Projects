@@ -1,3 +1,5 @@
+// Fire2012 by Mark Kriegsman, July 2012
+
 uint16_t customFireEffect() {
   Fire2012();
   return (ws2812fx.getSpeed() / NUM_LEDS);
@@ -45,11 +47,6 @@ void Fire2012() {
       } else {
         pixelnumber = j;
       }
-
-// **** modified for use with WS2812FX ****
-//    leds[pixelnumber] = color;
       ws2812fx.setPixelColor(pixelnumber, color.red, color.green, color.blue);
-// **** modified for use with WS2812FX ****
-
     }
 }

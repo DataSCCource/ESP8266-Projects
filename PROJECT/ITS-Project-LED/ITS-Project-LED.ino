@@ -1,6 +1,7 @@
 /*
- Smarthub Controller.
- This program controls incoming sensors and an ws2812b LED strip
+ * Project LismahoLED
+ * Actor Control Program
+ * This program controls an ws2812b LED strip via MQTT.
  */
 
 #include <ESP8266WiFi.h>
@@ -14,7 +15,6 @@
 const char* ssid = "SmartHub";
 const char* password = "Lismaholed";
 const char* mqtt_server = "192.168.0.10";
-
 
 int MODE_FIREPLACE = -1;
 
@@ -35,6 +35,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 WS2812FX ws2812fx = WS2812FX(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
+// Main setup function
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -53,6 +54,23 @@ void setup() {
   handleLight();
 }
 
+// Main loop function
+void loop() {
+  ws2812fx.service();
+
+  // When in the process of fading from one brightness to another, call handleFade() method every 5ms
+  if((fadeUp || fadeDown) && (millis()%5 == 0)) {
+    handleFade();
+  }
+
+  // When not connected to MQTT-Broker, (re-)connect to it
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+}
+
+// Setup/connect to Wifi
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -78,7 +96,7 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-
+// (Re-)Connect to MQTT-Broker and subscribe to Actor Topic
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -105,6 +123,7 @@ void reconnect() {
   }
 }
 
+// publish current status via MQTT 
 void sendStatus() {
   Serial.println("## Sending status");
 
@@ -126,9 +145,9 @@ void sendStatus() {
   tmpTopic = MQTT_TOPIC+"/speed";
   String speedString = (String)currentSpeed;
   client.publish(tmpTopic.c_str(), speedString.c_str());
-
 }
 
+// Callback method when messages for subscribed Topic are comming in.
 void callback(char* topic_char, byte* payload, unsigned int length) {
   //get rid of leftovers in the payload-buffer
   payload[length] = '\0';
@@ -143,6 +162,7 @@ void callback(char* topic_char, byte* payload, unsigned int length) {
   }
   Serial.println();
 
+  // Handle message based on given topic
   if(topic.equals(MQTT_TOPIC+"/enable")) {
     // 1 -> true; 0 -> false
     if(strcmp(value, "1") == 0) {
@@ -169,12 +189,9 @@ void callback(char* topic_char, byte* payload, unsigned int length) {
   }
 }
 
-
-void setEffectSpeed(int newSpeed) {
-  currentSpeed = newSpeed;
-  ws2812fx.setSpeed(currentSpeed);
-}
-
+// Set the current effect mode
+// (see: https://github.com/kitesurfer1404/WS2812FX/blob/master/src/WS2812FX.h line 120ff)
+// plus "-1" or MODE_FIREPLACE for Fire2012 Effect
 void setWorkingMode(int newMode) {
   Serial.println("Setting mode to " + (String) newMode);
   currentMode = newMode;
@@ -182,6 +199,13 @@ void setWorkingMode(int newMode) {
   handleLight();
 }
 
+// Set the effect speed
+void setEffectSpeed(int newSpeed) {
+  currentSpeed = newSpeed;
+  ws2812fx.setSpeed(currentSpeed);
+}
+
+// Set the LED color if the chosen effect allows that
 void setLedColor(const char*  newColor) {
   Serial.println("Setting color to " + (String) newColor);
   currentColor = (uint32_t) strtol( &newColor[1], NULL, 16);
@@ -189,6 +213,7 @@ void setLedColor(const char*  newColor) {
   handleLight();
 }
 
+// Set target brightness and activate fading
 void setLedBrightness(int newBrightness) {
   Serial.println("Setting brightness to " + (String) newBrightness);
   targetBrightness = newBrightness;
@@ -197,14 +222,10 @@ void setLedBrightness(int newBrightness) {
 }
 
 
-// Handle LED with current settings
+// Apply current settings to LED
 void handleLight() {
   ws2812fx.setColor(currentColor);
   if(currentMode == MODE_FIREPLACE) {
-    // TODO FIRE ;)
-//    ws2812fx.setColor(255, 69,3);
-//    ws2812fx.setSpeed(70);
-//    ws2812fx.setMode(FX_MODE_FIRE_FLICKER_INTENSE);
       ws2812fx.setMode(FX_MODE_CUSTOM);
       ws2812fx.setCustomMode(customFireEffect);
   } else {
@@ -214,21 +235,7 @@ void handleLight() {
   }
 }
 
-
-void loop() {
-  ws2812fx.service();
-
-  if((fadeUp || fadeDown) && (millis()%5 == 0)) {
-    handleFade();
-  }
-
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
-
-}
-
+// If brightness is changed, slowly fade up/down to the target grightness
 void handleFade() {
   if(fadeUp) {
     if(currentBrightness < targetBrightness) {
