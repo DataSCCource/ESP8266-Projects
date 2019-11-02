@@ -18,8 +18,6 @@ const char* mqtt_server = "192.168.0.10";
 
 int MODE_FIREPLACE = -1;
 
-bool fadeUp = false;
-bool fadeDown = false;
 int currentBrightness = 0;
 long nextFade = 0;
 
@@ -59,7 +57,7 @@ void loop() {
   ws2812fx.service();
 
   // When in the process of fading from one brightness to another, call handleFade() method every 5ms
-  if((fadeUp || fadeDown) && (millis()%5 == 0)) {
+  if((currentBrightness != targetBrightness) && (millis()%5 == 0)) {
     handleFade();
   }
 
@@ -217,8 +215,6 @@ void setLedColor(const char*  newColor) {
 void setLedBrightness(int newBrightness) {
   Serial.println("Setting brightness to " + (String) newBrightness);
   targetBrightness = newBrightness;
-  fadeUp =  currentBrightness < targetBrightness;
-  fadeDown = currentBrightness > targetBrightness;
 }
 
 
@@ -237,21 +233,12 @@ void handleLight() {
 
 // If brightness is changed, slowly fade up/down to the target grightness
 void handleFade() {
-  if(fadeUp) {
-    if(currentBrightness < targetBrightness) {
-      currentBrightness++;
-      ws2812fx.setBrightness(currentBrightness);
-    } else {
-      fadeUp = false;
-    }
+  if(currentBrightness < targetBrightness) {
+    currentBrightness++;
   }
 
-  if(fadeDown) {
-    if(currentBrightness > targetBrightness) {
-      currentBrightness--;
-      ws2812fx.setBrightness(currentBrightness);
-    } else {
-      fadeDown = false;
-    }
+  if(currentBrightness > targetBrightness) {
+    currentBrightness--;
   }
+    ws2812fx.setBrightness(currentBrightness);
 }
