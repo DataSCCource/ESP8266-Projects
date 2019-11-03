@@ -17,7 +17,7 @@ String MQTT_TOPIC = "/sensor/motion/"+SENSOR_NR;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-#define LED_STATUS  5  // D1
+#define LED_STATUS  2  // D4
 #define MOTION_PIN  16 // D0
 
 bool state = LOW;
