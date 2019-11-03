@@ -10,7 +10,9 @@
 #include <WS2812FX.h>
 
 #define LED_PIN     14  // D5
+#define LED_STATUS  5  // D1
 #define NUM_LEDS    60
+
 
 const char* ssid = "SmartHub";
 const char* password = "Lismaholed";
@@ -37,6 +39,7 @@ WS2812FX ws2812fx = WS2812FX(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_STATUS, OUTPUT);
   
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -79,9 +82,11 @@ void setup_wifi() {
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    digitalWrite(LED_BUILTIN, LOW); 
+    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_STATUS, LOW); 
     delay(250);
-    digitalWrite(LED_BUILTIN, HIGH); 
+    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(LED_STATUS, HIGH); 
     delay(250);
     Serial.print(".");
   }
@@ -98,6 +103,8 @@ void setup_wifi() {
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_STATUS, LOW); 
     delay(500);
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
@@ -106,7 +113,8 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
-      digitalWrite(LED_BUILTIN, LOW); 
+      digitalWrite(LED_BUILTIN, LOW);
+      digitalWrite(LED_STATUS, HIGH); 
 
       String subTopic = MQTT_TOPIC+"/#";
       sendStatus();
