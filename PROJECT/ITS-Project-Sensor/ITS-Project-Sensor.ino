@@ -5,7 +5,7 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-
+#include "Adafruit_VL53L0X.h"
 
 const char* ssid = "SmartHub";
 const char* password = "Lismaholed";
@@ -13,9 +13,11 @@ const char* mqtt_server = "192.168.0.10";
 
 String SENSOR_NR = "1";
 String MQTT_TOPIC = "/sensor/motion/"+SENSOR_NR;
+String MQTT_TOPIC_CONTROL = "/control/sensor/motion/"+SENSOR_NR;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
 #define LED_STATUS  2  // D4
 #define MOTION_PIN  16 // D0
@@ -25,7 +27,11 @@ bool stateLowSent = false;
 bool stateHighSent = false;
 
 int maxBrightness = 512; // max 1023
+int currentDistance = 0;
+int lastDistance = 0;
+bool distanceEnabled = true;
 
+bool sensorEnabled = true;
 
 void setup() {
   Serial.begin(115200);
@@ -34,6 +40,12 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+
+  if (!lox.begin()) {
+    Serial.println(F("Failed to boot VL53L0X"));
+    while(1);
+  }
+
 }
 
 void loop() {
@@ -42,22 +54,35 @@ void loop() {
   }
   client.loop();
 
-  if(isDarkEnough()) {
-    detectedMotion();
-    String tmpTopic = MQTT_TOPIC+"/detected";
-    
-    if(state == HIGH && !stateHighSent) {
-      client.publish(tmpTopic.c_str(), "1");
-      stateHighSent = true;
-      stateLowSent = false;
-    } else if (state == LOW && !stateLowSent) {
-      client.publish(tmpTopic.c_str(), "0");
-      stateLowSent = true;
-      stateHighSent = false;
+  if(sensorEnabled) {
+    if(isDarkEnough()) {
+      detectedMotion();
+      String tmpTopic = MQTT_TOPIC_CONTROL+"/detected";
+      
+      if(state == HIGH && !stateHighSent) {
+        client.publish(tmpTopic.c_str(), "1");
+        stateHighSent = true;
+        stateLowSent = false;
+      } else if (state == LOW && !stateLowSent) {
+        client.publish(tmpTopic.c_str(), "0");
+        stateLowSent = true;
+        stateHighSent = false;
+      }
     }
+  
+    if(distanceEnabled) {
+      measureDistance();
+      if(abs(currentDistance - lastDistance) > 25) {
+        lastDistance = currentDistance;
+        String tmpTopic = MQTT_TOPIC_CONTROL+"/distance";
+        String distanceString = (String) currentDistance;
+        Serial.println(distanceString);
+        client.publish(tmpTopic.c_str(), distanceString.c_str());
+      }
+    }    
   }
 
-  delay(1000);
+  delay(100);
 }
 
 void setup_wifi() {
@@ -111,15 +136,12 @@ void reconnect() {
   }
 }
 
-
 void sendStatus() {
   Serial.println("## Sending status");
 
   String tmpTopic = MQTT_TOPIC+"/maxbrightness";
   String maxBrightString = (String)maxBrightness;
   client.publish(tmpTopic.c_str(), maxBrightString.c_str());
-
-  
 }
 
 void callback(char* topic_char, byte* payload, unsigned int length) {
@@ -147,9 +169,11 @@ void callback(char* topic_char, byte* payload, unsigned int length) {
 
 void setEnable(String value) {
     if(value.equals("1")) {
-      // TODO: enable Sensor
+      Serial.println("### Enabling Sensor...");
+      sensorEnabled = true;
     } else {
-      // TODO: disable Sensor
+      Serial.println("### Disabling Sensor...");
+      sensorEnabled = false;
     }
 }
 
@@ -160,8 +184,8 @@ void setMaxBrightness(String value) {
 
 bool isDarkEnough() {
   int sensorValue = analogRead(A0);   // read the input on analog pin 0
-  Serial.print((String)sensorValue + " | Dark enough: ");   // print out the value you read
-  Serial.println(sensorValue < maxBrightness?"TRUE":"FALSE");
+  //Serial.print((String)sensorValue + " | Dark enough: ");   // print out the value you read
+  //Serial.println(sensorValue < maxBrightness?"TRUE":"FALSE");
   if(sensorValue < maxBrightness) {
     return true;
   } else {
@@ -183,5 +207,13 @@ bool detectedMotion() {
         state = LOW;       // update variable state to LOW
         return false;
     }
+  }
+}
+
+void measureDistance() {
+  VL53L0X_RangingMeasurementData_t measure;
+  lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
+  if (measure.RangeStatus != 4) { // phase failures have incorrect data
+    currentDistance = measure.RangeMilliMeter;
   }
 }
