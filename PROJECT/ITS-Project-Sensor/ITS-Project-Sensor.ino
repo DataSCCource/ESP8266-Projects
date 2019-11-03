@@ -14,7 +14,7 @@ const char* mqtt_server = "192.168.0.10";
 
 String SENSOR_NR = "1";
 String MQTT_TOPIC = "/sensor/motion/"+SENSOR_NR;
-String MQTT_TOPIC_CONTROL = "/control/sensor/motion/"+SENSOR_NR;
+String MQTT_TOPIC_CONTROL = "/control/sensor/motion";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
