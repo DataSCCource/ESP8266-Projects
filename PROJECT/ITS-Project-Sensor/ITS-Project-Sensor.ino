@@ -11,24 +11,53 @@ const char* ssid = "SmartHub";
 const char* password = "Lismaholed";
 const char* mqtt_server = "192.168.0.10";
 
+String SENSOR_NR = "1";
+String MQTT_TOPIC = "/sensor/motion/"+SENSOR_NR;
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-int sensor = 16; // D0
-int led = LED_BUILTIN;
+#define LED_STATUS  5  // D1
+#define MOTION_PIN  16 // D0
 
 bool state = LOW;
 bool stateLowSent = false;
 bool stateHighSent = false;
 
+int maxBrightness = 512; // max 1023
+
 
 void setup() {
   Serial.begin(115200);
+  pinMode(MOTION_PIN, INPUT);
+  pinMode(LED_STATUS, OUTPUT);
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+}
 
-  pinMode(sensor, INPUT);
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  if(isDarkEnough()) {
+    detectedMotion();
+    String tmpTopic = MQTT_TOPIC+"/detected";
+    
+    if(state == HIGH && !stateHighSent) {
+      client.publish(tmpTopic.c_str(), "1");
+      stateHighSent = true;
+      stateLowSent = false;
+    } else if (state == LOW && !stateLowSent) {
+      client.publish(tmpTopic.c_str(), "0");
+      stateLowSent = true;
+      stateHighSent = false;
+    }
+  }
+
+  delay(1000);
 }
 
 void setup_wifi() {
@@ -39,9 +68,11 @@ void setup_wifi() {
   Serial.println(ssid);
 
   WiFi.begin(ssid, password);
-
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    digitalWrite(LED_STATUS, LOW); 
+    delay(250);
+    digitalWrite(LED_STATUS, HIGH); 
+    delay(250);
     Serial.print(".");
   }
 
@@ -56,6 +87,8 @@ void setup_wifi() {
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
+    digitalWrite(LED_STATUS, LOW); 
+    delay(500);
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
     String clientId = "ESP8266Client-";
@@ -63,10 +96,11 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
+      digitalWrite(LED_STATUS, HIGH); 
 
-      //client.subscribe("sensor/#");
-      //client.subscribe("actor/#");
-      //client.subscribe("control/#");
+      String subTopic = MQTT_TOPIC+"/#";
+      sendStatus();
+      client.subscribe(subTopic.c_str());
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -78,10 +112,21 @@ void reconnect() {
 }
 
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void sendStatus() {
+  Serial.println("## Sending status");
+
+  String tmpTopic = MQTT_TOPIC+"/maxbrightness";
+  String maxBrightString = (String)maxBrightness;
+  client.publish(tmpTopic.c_str(), maxBrightString.c_str());
+
+  
+}
+
+void callback(char* topic_char, byte* payload, unsigned int length) {
   //get rid of leftovers in the payload-buffer
   payload[length] = '\0';
   String value = (char*)payload;
+  String topic = (String) topic_char;
   
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -91,50 +136,48 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
 
-  if(strcmp(topic, "sensor/motion/1") == 0) {
-    // 1 -> true; 0 -> false
-  } else if(strcmp(topic, "sensor/distance/1") == 0) {
-  } else if(strcmp(topic, "control/led/mode") == 0) {
-  } else if(strcmp(topic, "control/led/color") == 0) {
+  if(topic.equals(MQTT_TOPIC+"/enable")) {
+    setEnable(value);
+  } else if(topic.equals(MQTT_TOPIC+"/maxbrightness")) {
+    setMaxBrightness(value);
   } else {
     Serial.println("## Unbehandeltes Topic: " + value);
   }
 }
 
+void setEnable(String value) {
+    if(value.equals("1")) {
+      // TODO: enable Sensor
+    } else {
+      // TODO: disable Sensor
+    }
+}
 
-void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
+void setMaxBrightness(String value) {
+  maxBrightness = value.toInt();
+}
 
-  motionDetected();
-  if(state == HIGH && !stateHighSent) {
-    client.publish("sensor/motion", "1");
-    stateHighSent = true;
-    stateLowSent = false;
-  } else if (state == LOW && !stateLowSent) {
-    client.publish("sensor/motion", "0");
-    stateLowSent = true;
-    stateHighSent = false;
+
+bool isDarkEnough() {
+  int sensorValue = analogRead(A0);   // read the input on analog pin 0
+  Serial.print((String)sensorValue + " | Dark enough: ");   // print out the value you read
+  Serial.println(sensorValue < maxBrightness?"TRUE":"FALSE");
+  if(sensorValue < maxBrightness) {
+    return true;
+  } else {
+    return false;
   }
 }
 
-bool motionDetected() {
-  int val = digitalRead(sensor);   // read sensor value
+bool detectedMotion() {
+  int val = digitalRead(MOTION_PIN);   // read sensor value
   if (val == HIGH) {           // check if the sensor is HIGH
-    digitalWrite(led, HIGH);   // turn LED ON
-    delay(100);                // delay 100 milliseconds 
-    
     if (state == LOW) {
       Serial.println("Motion detected!"); 
       state = HIGH;       // update variable state to HIGH
       return true;
     }
   } else {
-      digitalWrite(led, LOW); // turn LED OFF
-      delay(200);             // delay 200 milliseconds 
-      
       if (state == HIGH){
         Serial.println("Motion stopped!");
         state = LOW;       // update variable state to LOW
