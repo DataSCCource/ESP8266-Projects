@@ -1,6 +1,7 @@
 /*
- Smarthub Controller.
- This program controls incoming sensors and an ws2812b LED strip
+ LismahoLED Sensor.
+ This program uses sensors-values to detect motion, brightness and distance
+ The values are sent to the central Hub
  */
 
 #include <ESP8266WiFi.h>
@@ -33,6 +34,7 @@ bool distanceEnabled = true;
 
 bool sensorEnabled = true;
 
+// Main setup function
 void setup() {
   Serial.begin(115200);
   pinMode(MOTION_PIN, INPUT);
@@ -45,9 +47,9 @@ void setup() {
     Serial.println(F("Failed to boot VL53L0X"));
     while(1);
   }
-
 }
 
+// Main loop function
 void loop() {
   if (!client.connected()) {
     reconnect();
@@ -69,7 +71,7 @@ void loop() {
         stateHighSent = false;
       }
     }
-  
+
     if(distanceEnabled) {
       measureDistance();
       if(abs(currentDistance - lastDistance) > 25) {
@@ -85,6 +87,7 @@ void loop() {
   delay(100);
 }
 
+// Setup / connect to Wifi
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -109,6 +112,7 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
+// (Re-)Connect to MQTT-Broker and subscribe to sensor topic
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -136,6 +140,7 @@ void reconnect() {
   }
 }
 
+// publish current status via MQTT 
 void sendStatus() {
   Serial.println("## Sending status");
 
@@ -144,6 +149,7 @@ void sendStatus() {
   client.publish(tmpTopic.c_str(), maxBrightString.c_str());
 }
 
+// Callback method when messages for subscribed topic are comming in.
 void callback(char* topic_char, byte* payload, unsigned int length) {
   //get rid of leftovers in the payload-buffer
   payload[length] = '\0';
@@ -167,6 +173,7 @@ void callback(char* topic_char, byte* payload, unsigned int length) {
   }
 }
 
+// 0/1 for enabling/disabling the sensor unit
 void setEnable(String value) {
     if(value.equals("1")) {
       Serial.println("### Enabling Sensor...");
@@ -177,11 +184,12 @@ void setEnable(String value) {
     }
 }
 
+// Set the max brightness (0-1024)
 void setMaxBrightness(String value) {
   maxBrightness = value.toInt();
 }
 
-
+// Use maxBrightness to determine if it is too bright for the motion sensor
 bool isDarkEnough() {
   int sensorValue = analogRead(A0);   // read the input on analog pin 0
   //Serial.print((String)sensorValue + " | Dark enough: ");   // print out the value you read
@@ -193,6 +201,7 @@ bool isDarkEnough() {
   }
 }
 
+// Detect motion
 bool detectedMotion() {
   int val = digitalRead(MOTION_PIN);   // read sensor value
   if (val == HIGH) {           // check if the sensor is HIGH
@@ -210,6 +219,7 @@ bool detectedMotion() {
   }
 }
 
+// Use VL53L0X to determine distance
 void measureDistance() {
   VL53L0X_RangingMeasurementData_t measure;
   lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
