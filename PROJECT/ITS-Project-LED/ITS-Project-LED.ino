@@ -24,9 +24,10 @@ int currentBrightness = 0;
 long nextFade = 0;
 
 int currentMode = 0;
-uint32_t currentColor = RED;
+uint32_t currentColor = BLUE;
 int targetBrightness = 255;
 int currentSpeed = 1000;
+bool ledEnabled = true;
 
 String ACTOR_NR = "1";
 String MQTT_TOPIC = "/actor/led/"+ACTOR_NR;
@@ -133,22 +134,22 @@ void reconnect() {
 void sendStatus() {
   Serial.println("## Sending status");
 
-  String tmpTopic = MQTT_TOPIC+"/enable";
-  client.publish(tmpTopic.c_str(), currentBrightness>0?"1":"0");
+  String tmpTopic = "/status"+MQTT_TOPIC+"/enable";
+  client.publish(tmpTopic.c_str(), ledEnabled?"1":"0");
 
-  tmpTopic = MQTT_TOPIC+"/color";
+  tmpTopic = "/status"+MQTT_TOPIC+"/color";
   String hexColor = "#" + String(currentColor, HEX);
   client.publish(tmpTopic.c_str(), hexColor.c_str());
 
-  tmpTopic = MQTT_TOPIC+"/mode";
+  tmpTopic = "/status"+MQTT_TOPIC+"/mode";
   String modeString = (String) currentMode;
   client.publish(tmpTopic.c_str(), modeString.c_str());
 
-  tmpTopic = MQTT_TOPIC+"/brightness";
+  tmpTopic = "/status"+MQTT_TOPIC+"/brightness";
   String brightString = (String)targetBrightness;
   client.publish(tmpTopic.c_str(), brightString.c_str());
 
-  tmpTopic = MQTT_TOPIC+"/speed";
+  tmpTopic = "/status"+MQTT_TOPIC+"/speed";
   String speedString = (String)currentSpeed;
   client.publish(tmpTopic.c_str(), speedString.c_str());
 }
@@ -173,8 +174,10 @@ void callback(char* topic_char, byte* payload, unsigned int length) {
     // 1 -> true; 0 -> false
     if(strcmp(value, "1") == 0) {
       setLedBrightness(255);
+      ledEnabled = true;
     } else {
       setLedBrightness(0);
+      ledEnabled = false;
     }
   } else if(topic.equals(MQTT_TOPIC+"/color")) {
     setLedColor(value);
@@ -241,7 +244,7 @@ void handleLight() {
 
 // If brightness is changed, slowly fade up/down to the target grightness
 void handleFade() {
-  if(currentBrightness < targetBrightness) {
+  if(currentBrightness < targetBrightness && ledEnabled) {
     currentBrightness++;
   }
 

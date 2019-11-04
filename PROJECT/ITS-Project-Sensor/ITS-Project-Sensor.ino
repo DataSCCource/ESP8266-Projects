@@ -144,7 +144,7 @@ void reconnect() {
 void sendStatus() {
   Serial.println("## Sending status");
 
-  String tmpTopic = MQTT_TOPIC+"/maxbrightness";
+  String tmpTopic = "/status"+MQTT_TOPIC+"/maxbrightness";
   String maxBrightString = (String)maxBrightness;
   client.publish(tmpTopic.c_str(), maxBrightString.c_str());
 }
@@ -192,8 +192,8 @@ void setMaxBrightness(String value) {
 // Use maxBrightness to determine if it is too bright for the motion sensor
 bool isDarkEnough() {
   int sensorValue = analogRead(A0);   // read the input on analog pin 0
-  //Serial.print((String)sensorValue + " | Dark enough: ");   // print out the value you read
-  //Serial.println(sensorValue < maxBrightness?"TRUE":"FALSE");
+  Serial.print((String)sensorValue + " | Dark enough: ");   // print out the value you read
+  Serial.println(sensorValue < maxBrightness?"TRUE":"FALSE");
   if(sensorValue < maxBrightness) {
     return true;
   } else {
