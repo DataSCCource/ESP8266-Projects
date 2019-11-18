@@ -185,6 +185,8 @@ void setMotionDetected(bool newDetected) {
 void setSensorDistance(String newDistance) {
   if(motionModeActive) {
     int bright = 255-newDistance.toInt()/4;
+    if(bright > 255) bright = 255;
+    if(bright < 0) bright = 0;
     String brightString = (String)bright;
     
     Serial.println("Setting distande to " + newDistance + " | " + brightString);
